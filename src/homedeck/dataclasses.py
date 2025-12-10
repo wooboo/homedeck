@@ -12,7 +12,7 @@ from .template import has_jinja_template
 from .utils import apply_presets, normalize_button_positions, normalize_hex_color
 
 FONTS_MAP = {
-    1: 'Source Han Sans SC',
+    1: 'Roboto-SemiBold',
     2: 'FZShuSong-Z01',
     3: 'DejaVu Sans',
     4: 'Bareona',

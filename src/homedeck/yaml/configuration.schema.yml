@@ -48,6 +48,8 @@ $defs:
       - $page.back
       - $page.previous
       - $page.next
+      - $system.exec
+      - $system.keypress
 
   EntityId:
     description: Entity ID pattern, like "light.living_room"
@@ -172,8 +174,8 @@ $defs:
           - $ref: '#/$defs/EntityId'
       data:
         $ref: '#/$defs/StringOrObject'
-    required:
-      - action
+    # required:
+    #   - action
 
   Color:
     description: Represents a color as either hex string or numeric code

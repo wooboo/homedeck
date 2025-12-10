@@ -1,11 +1,28 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
+import shlex
 import shutil
 from copy import deepcopy
 from typing import Dict
 
 from deepdiff import DeepDiff
+
+try:
+    from pynput.keyboard import Controller, Key
+    keyboard = Controller()
+    USE_PYNPUT = True
+except Exception:
+    print('⚠️ pynput failed to initialize, falling back to evdev')
+    USE_PYNPUT = False
+    try:
+        from evdev import UInput, ecodes
+        uinput = UInput()
+    except Exception as e:
+        print(f'⚠️ evdev failed to initialize: {e}')
+        uinput = None
 
 from .dataclasses import (
     PageButtonActionConfig,
@@ -17,6 +34,77 @@ from .enums import ButtonElementAction, InteractionType
 from .icons import icon_provider
 from .template import render_template
 from .utils import deep_merge
+
+
+def _press_keys(keys_str: str):
+    print(f'Pressing keys: {keys_str}')
+    keys = keys_str.split('+')
+    
+    if USE_PYNPUT:
+        pressed_keys = []
+        for k in keys:
+            k = k.strip().lower()
+            key = None
+            if hasattr(Key, k):
+                key = getattr(Key, k)
+            elif hasattr(Key, f'media_{k}'):
+                key = getattr(Key, f'media_{k}')
+            else:
+                # Single character
+                key = k
+
+            if key:
+                print(f'  - Pressing {key}')
+                keyboard.press(key)
+                pressed_keys.append(key)
+
+        for key in reversed(pressed_keys):
+            print(f'  - Releasing {key}')
+            keyboard.release(key)
+    elif uinput:
+        pressed_keys = []
+        for k in keys:
+            k = k.strip().lower()
+            key_code = None
+            
+            # Map common keys
+            if k == 'ctrl': key_code = ecodes.KEY_LEFTCTRL
+            elif k == 'alt': key_code = ecodes.KEY_LEFTALT
+            elif k == 'shift': key_code = ecodes.KEY_LEFTSHIFT
+            elif k == 'cmd' or k == 'super' or k == 'win': key_code = ecodes.KEY_LEFTMETA
+            elif k == 'enter': key_code = ecodes.KEY_ENTER
+            elif k == 'esc': key_code = ecodes.KEY_ESC
+            elif k == 'backspace': key_code = ecodes.KEY_BACKSPACE
+            elif k == 'tab': key_code = ecodes.KEY_TAB
+            elif k == 'space': key_code = ecodes.KEY_SPACE
+            elif k == 'up': key_code = ecodes.KEY_UP
+            elif k == 'down': key_code = ecodes.KEY_DOWN
+            elif k == 'left': key_code = ecodes.KEY_LEFT
+            elif k == 'right': key_code = ecodes.KEY_RIGHT
+            elif k == 'volume_up': key_code = ecodes.KEY_VOLUMEUP
+            elif k == 'volume_down': key_code = ecodes.KEY_VOLUMEDOWN
+            elif k == 'volume_mute': key_code = ecodes.KEY_MUTE
+            elif len(k) == 1:
+                # Try to find KEY_X
+                try:
+                    key_code = getattr(ecodes, f'KEY_{k.upper()}')
+                except AttributeError:
+                    pass
+            
+            if key_code:
+                print(f'  - Pressing {key_code}')
+                uinput.write(ecodes.EV_KEY, key_code, 1)
+                pressed_keys.append(key_code)
+        
+        uinput.syn()
+        
+        for key_code in reversed(pressed_keys):
+            print(f'  - Releasing {key_code}')
+            uinput.write(ecodes.EV_KEY, key_code, 0)
+        
+        uinput.syn()
+    else:
+        print('❌ No keyboard controller available')
 
 
 class ButtonElement:
@@ -55,6 +143,14 @@ class ButtonElement:
             deck.page_go_next()
         elif action == ButtonElementAction.PAGE_GO_TO.value:
             deck.page_go_to(main_action.data)
+        elif action == ButtonElementAction.SYSTEM_EXEC.value:
+            cmd = main_action.data
+            if isinstance(cmd, str):
+                await asyncio.create_subprocess_shell(cmd)
+        elif action == ButtonElementAction.SYSTEM_KEYPRESS.value:
+            keys_str = main_action.data
+            if isinstance(keys_str, str):
+                _press_keys(keys_str)
         else:
             domain, action = action.split('.')
             await deck.call_ha_service(domain=domain, service=action, service_data=main_action.data)
@@ -103,7 +199,7 @@ class PageElement:
         self._button_raws[index] = button
         self._button_elements[index] = self._to_button_element(button)
 
-    def render_buttons(self, *, system_buttons: Dict[ButtonElementAction, SystemButtonConfig], page_number: int = 1, is_sub_page: bool = False, buttons_per_page=0, all_states=dict) -> bool:
+    def render_buttons(self, *, system_buttons: Dict[ButtonElementAction, SystemButtonConfig], label_style=None, page_number: int = 1, is_sub_page: bool = False, buttons_per_page=0, all_states=dict) -> bool:
         old_raws = self._button_raws
         new_raws = {}
         self._button_elements = {}
@@ -113,6 +209,14 @@ class PageElement:
             if not button:
                 new_raws[index] = None
                 continue
+
+            # Apply label style
+            if label_style:
+                button.setdefault('text_align', label_style.align)
+                button.setdefault('text_color', label_style.color)
+                button.setdefault('text_size', label_style.size)
+                if hasattr(label_style, 'font_name'):
+                    button.setdefault('text_font', label_style.font_name)
 
             # Get entity_id for self_*() mixins
             entity_id = None

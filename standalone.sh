@@ -1,7 +1,22 @@
 #!/bin/bash
 
-/lib/systemd/systemd-udevd --daemon
-udevadm control --reload-rules
-udevadm trigger
+if [ "$EUID" -eq 0 ]; then
+    # If running as root (e.g. in a container or minimal OS), ensure udev is ready
+    if [ -x "/lib/systemd/systemd-udevd" ]; then
+        /lib/systemd/systemd-udevd --daemon
+    fi
+    udevadm control --reload-rules
+    udevadm trigger
+fi
 
-python standalone.py
+# Use venv if available
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+fi
+
+# Clear pycache to ensure fresh code is loaded
+find . -type d -name "__pycache__" -exec rm -rf {} +
+
+python server.py
+
+

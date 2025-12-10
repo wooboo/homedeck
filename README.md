@@ -26,6 +26,39 @@ A lightweight Python library to control Home Assistant using Stream Deck-like de
 
 **SD Card:** minimum 8GB
 
+### Installation
+
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   pip install -e .
+   ```
+
+### Setup (Linux)
+
+To access the device without `root` privileges, you need to install udev rules:
+
+1. Copy the rules file:
+   ```bash
+   sudo cp assets/50-homedeck.rules /etc/udev/rules.d/
+   ```
+2. Reload rules:
+   ```bash
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
+
+### Running
+
+1. Run the server:
+   ```bash
+   python server.py
+   ```
+   
+   Or use the standalone script (for SBCs):
+   ```bash
+   ./standalone.sh
+   ```
+
 ### Configuration
 
 1. Rename a `.env.example` to `.env` and follow the instructions in the file.

@@ -6,6 +6,9 @@ class ButtonElementAction(Enum):
     PAGE_PREVIOUS = '$page.previous'
     PAGE_NEXT = '$page.next'
     PAGE_GO_TO = '$page.go_to'
+    SYSTEM_EXEC = '$system.exec'
+    SYSTEM_KEYPRESS = '$system.keypress'
+
 
 
 class InteractionType(Enum):

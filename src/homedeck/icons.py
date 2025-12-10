@@ -109,7 +109,7 @@ class Icon:
             icon['icon_name'] = ''
 
             icon.setdefault('text_align', 'center')
-            icon.setdefault('text_font', 'Roboto-SemiBold')
+            # icon.setdefault('text_font', 'Roboto-SemiBold')
             icon.setdefault('text_size', 20)
             icon.setdefault('text_offset', (0, 0))
 
@@ -554,13 +554,29 @@ class IconEditor:
 
     @staticmethod
     def draw_texts(img: Image, *, text: str, color: str, align: str, font: str, size: int, offset: int):
-        if not text or not color or not font or not size:
+        if not text or not color or not size:
             return img
+        
+        if not font:
+            font = 'Roboto-SemiBold'
 
         font_key = f'{font}-{size}'
         if font_key not in IconEditor._cached_fonts:
-            font = ImageFont.truetype(f'assets/fonts/{font}.ttf', size)
-            IconEditor._cached_fonts[font_key] = font
+            font_path = f'assets/fonts/{font}.ttf'
+            if not os.path.exists(font_path):
+                print(f'⚠️ Font file not found: {font_path}')
+                # Fallback to absolute path if relative fails
+                script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+                font_path = os.path.join(script_dir, 'assets', 'fonts', f'{font}.ttf')
+                print(f'Trying absolute path: {font_path}')
+
+            try:
+                font_obj = ImageFont.truetype(font_path, size)
+                IconEditor._cached_fonts[font_key] = font_obj
+                font = font_obj
+            except Exception as e:
+                print(f'❌ Failed to load font: {font_path}, error: {e}')
+                return img
         else:
             font = IconEditor._cached_fonts[font_key]
 

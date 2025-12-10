@@ -34,13 +34,32 @@ class HomeDeck:
             self._file_path = os.path.abspath('assets/configuration.yml')
             self._last_modified = 0
 
-        def on_modified(self, event):
-            if event.src_path == self._file_path:
+        def _process_event(self, event):
+            # Check if the event is for configuration.yml
+            # We check both absolute path and ending with the filename to be safe
+            is_target = event.src_path == self._file_path or event.src_path.endswith('assets/configuration.yml')
+            
+            # Also check dest_path for move events
+            if hasattr(event, 'dest_path'):
+                is_target = is_target or event.dest_path == self._file_path or event.dest_path.endswith('assets/configuration.yml')
+
+            if is_target:
                 # Ignore events within 1 seconds
                 now = time.time()
                 if now - self._last_modified >= 1:
+                    print(f'📝 Configuration changed detected: {event.event_type}')
                     self._last_modified = now
                     self._deck._need_reload_all = True
+
+        def on_modified(self, event):
+            self._process_event(event)
+
+        def on_moved(self, event):
+            self._process_event(event)
+            
+        def on_created(self, event):
+            self._process_event(event)
+
 
         '''
         def on_created(self, event):
@@ -118,7 +137,7 @@ class HomeDeck:
 
         is_sub_page = self._current_page_id != '$root'
         page = self._configuration.get_page_element(page_id)
-        changed = page.render_buttons(system_buttons=self._configuration.system_buttons, page_number=self._current_page_number, is_sub_page=is_sub_page, buttons_per_page=self._device.BUTTON_COUNT, all_states=self._ha.all_states)
+        changed = page.render_buttons(system_buttons=self._configuration.system_buttons, label_style=self._configuration.label_style, page_number=self._current_page_number, is_sub_page=is_sub_page, buttons_per_page=self._device.BUTTON_COUNT, all_states=self._ha.all_states)
 
         # Don't render the same page
         if not force and self._current_page_element == page and not changed:
@@ -325,6 +344,9 @@ class HomeDeck:
                     await self._ha.get_all_states()
                     self._ha.on_event('state_changed', self._ha_on_state_changed)
                     await self._ha.subscribe_events('state_changed')
+
+                    # Initial configuration load
+                    self.reload_all()
 
                     self._is_ready = True
                     await asyncio.gather(
